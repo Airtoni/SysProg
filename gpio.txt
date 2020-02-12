@@ -1,0 +1,20 @@
+line 222 GPIO template  (memory add)
+
+
+
+BCM2835 Dokument
+
+
+er liefert uns 1 addresse... wir arbeiten mit offset (immer +4)
+(S.90)
+
+immer 3 Bit für einen gpio pin belegt. 
+-> Functionselectregister (S.92)
+
+
+Output select:
+	(S.95)
+
+
+
+Alles BitOperationen/Registermanipulation.
