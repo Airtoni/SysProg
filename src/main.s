@@ -36,12 +36,24 @@
         .equ      DEVICE_ARG,4                @ device address
         .equ      STACK_ARGS,8                @ sp already 8-byte aligned
 
+ @Teh following are defined by us
+    .equ    PIN11,14
+    .equ    PIN12,26
+    .equ    PIN13,23
+    .equ    PIN16,27
+    .equ    PIN17,0
+    .equ    PIN19,24
+    .equ    PIN26,25
+    .equ    PIN27,2
+
 TMPREG  .req      r5
 RETREG  .req      r6
 WAITREG .req      r8
 RLDREG  .req      r9
 GPIOREG .req      r10
 COLREG  .req      r11
+
+
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @ - START OF DATA SECTION @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -218,26 +230,61 @@ main:
         @ initialize all other hardware
         b         hw_init
 
+@ waits tree times the tick count privided in r0
+wait:
+        subs      r0, r0, #1
+        cmp       r0, #0
+        bne       wait
+        bx        lr
+
+@ pin 11 und 17 auf HIGH um Motoren aufzuwecken
+motor_wakeup:
+        mov         r0, #PIN11
+        mov         r1, #1                     @ bit 19 in r1 auf 1
+        bl          digitalWrite
+
+        mov         r0, #PIN17
+        mov         r1, #1                     @ bit 19 in r1 auf 1
+        bl          digitalWrite
+
+@ pin 27 auf HIGH um coproc aufwecken
+coproc_wakeup:
+        mov         r0, #PIN27
+        mov         r1, #1                     @ bit 19 in r1 auf 1
+        bl          digitalWrite
+
+
 hw_init:
         ldr       r1, =gpio_mmap_adr          @ reload the addr for accessing the GPIOs
         ldr       GPIOREG, [r1]
 
-        mov       r1, #0x1
-        lsl       r1, #27
-        str       r1, [GPIOREG,#0x4]          @ GPIO 19 als Output, dort wird der Feeder angesprochen
+        mov     r1,#1
 
-        mov       r1, #0x1
-        lsl       r1, #21
-        str       r1, [GPIOREG,#0x8]          @ GPIO 27 als Output, dort wird der Hilfscontroller angesprochen
+        mov     r0,#PIN11         @Outlet (nRSTOut)
+        bl      pinMode
 
-        mov       r1, #0x1
-        lsl       r1, #19                     @ bit 19 in r1 auf 1
+        mov     r0,#PIN12         @Outlet (StepOut)
+        bl      pinMode
 
-        mov       r2, #0x1
-        lsl       r2, #27                     @ bit 27 in r2 auf 1
+        mov     r0,#PIN13         @ColorWheel (StepCW)
+        bl      pinMode
 
-        orr       r1, r1, r2                  @ r1 und r2 verodern und in r1
-        str       r1, [GPIOREG,#0x1C]         @ in GPIO Output Set Register 0 den Wert von r1
+        mov     r0,#PIN16         @ColorWheel (DirCW)
+        bl      pinMode
+
+        mov     r0,#PIN17         @ColorWheel (nRSTCW)
+        bl      pinMode
+
+        mov     r0,#PIN19         @Feeder (GoStop)
+        bl      pinMode
+
+        mov     r0,#PIN26         @Outlet (DirOut)
+        bl      pinMode
+
+        mov     r0,#PIN27         @(nSLP)
+        bl      pinMode
+
+
 
         @ TODO: PLEASE INIT HW HERE
         @ HINT:
@@ -294,4 +341,3 @@ end_of_app:
         .end
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
