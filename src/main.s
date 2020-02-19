@@ -227,64 +227,6 @@ main:
         ldr       lr, [sp, #12]               @         lr
         add       sp, sp, #16                 @ restore sp
 
-        @ initialize all other hardware
-        b         hw_init
-
-@ waits tree times the tick count privided in r0
-wait:
-        subs      r0, r0, #1
-        cmp       r0, #0
-        bne       wait
-        bx        lr
-
-@ pin 11 und 17 auf HIGH um Motoren aufzuwecken
-motor_wakeup:
-        mov         r0, #PIN11
-        mov         r1, #1                     @ bit 19 in r1 auf 1
-        bl          digitalWrite
-
-        mov         r0, #PIN17
-        mov         r1, #1                     @ bit 19 in r1 auf 1
-        bl          digitalWrite
-
-@ pin 27 auf HIGH um coproc aufwecken
-coproc_wakeup:
-        mov         r0, #PIN27
-        mov         r1, #1                     @ bit 19 in r1 auf 1
-        bl          digitalWrite
-
-
-hw_init:
-        ldr       r1, =gpio_mmap_adr          @ reload the addr for accessing the GPIOs
-        ldr       GPIOREG, [r1]
-
-        mov     r1,#1
-
-        mov     r0,#PIN11         @Outlet (nRSTOut)
-        bl      pinMode
-
-        mov     r0,#PIN12         @Outlet (StepOut)
-        bl      pinMode
-
-        mov     r0,#PIN13         @ColorWheel (StepCW)
-        bl      pinMode
-
-        mov     r0,#PIN16         @ColorWheel (DirCW)
-        bl      pinMode
-
-        mov     r0,#PIN17         @ColorWheel (nRSTCW)
-        bl      pinMode
-
-        mov     r0,#PIN19         @Feeder (GoStop)
-        bl      pinMode
-
-        mov     r0,#PIN26         @Outlet (DirOut)
-        bl      pinMode
-
-        mov     r0,#PIN27         @(nSLP)
-        bl      pinMode
-
-
 
         @ TODO: PLEASE INIT HW HERE
         @ HINT:
@@ -296,6 +238,182 @@ hw_init:
 
         @ WARNING:
         @   call "end_of_app" if you're done with your application
+        bl           wiringPiSetup
+        bl          hw_init                 @ calling other hardware initalize
+      @  bl          led_init                @ calling led initalize
+
+        bl          coproc_wakeup
+        bl          motor_wakeup
+
+        bl          start_feeder
+        bl          go_default_color_wheel
+      @  bl          go_default_outlet
+
+main_loop:
+        @bl          rotate_color_wheel
+        bl          read_color
+        @bl          rotate_outlet
+        @b           main_loop
+        bl          stop_feeder
+
+        b           end_of_app
+
+@read Color
+read_color:
+        push        {lr}
+        mov         COLREG,#0b111
+        lsl         COLREG,#21
+
+        @ldr         r0,GPIOREG
+        @and         COLREG, COLREG, r0
+        @lsr         COLREG, #21
+        pop         {lr}
+        bx          lr
+
+@ waits three times the tick count privided in r0
+wait:
+        subs        r0, r0, #1
+        cmp         r0, #0
+        bne         wait
+        bx          lr
+
+@ starts the feeder
+start_feeder:
+        push        {lr}
+        mov         r0, #PIN19
+        mov         r1, #1
+        bl          digitalWrite
+        pop         {lr}
+        bx          lr
+
+@ starts the feeder
+stop_feeder:
+        push        {lr}
+        mov         r0, #PIN13
+        mov         r1, #0
+        bl          digitalWrite
+        pop         {lr}
+        bx          lr
+
+@ color_wheel steps one time, takes about 1ms
+step_color_wheel:
+        push        {lr}                    @ saveing lr for more branches
+        mov         r0, #PIN13              @ set StepCW to HIGH
+        mov         r1, #1
+        bl          digitalWrite
+
+        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        bl          wait
+
+        mov         r0, #PIN13              @ set StepCW to LOW
+        mov         r1, #0
+        bl          digitalWrite
+
+        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        bl          wait
+        pop         {lr}                    @ restores lr
+        bx          lr
+
+@ outlet steps one time, takes about 1ms
+step_outlet:
+        push        {lr}                    @ saveing for more branches
+        mov         r0, #PIN12              @ set StepOut to HIGH
+        mov         r1, #1
+        bl          digitalWrite
+
+        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        bl          wait
+
+        mov         r0, #PIN12              @ set StepOut to LOW
+        mov         r1, #0
+        bl          digitalWrite
+
+        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        bl          wait
+        pop         {lr}                    @ restores lr
+        bx          lr
+
+
+hw_init:
+
+        push        {lr}
+
+        ldr         r1, =gpio_mmap_adr      @ reload the addr for accessing the GPIOs
+        ldr         GPIOREG, [r1]
+
+        mov         r1,#1                   @ pinMode uses r0 to spesify the GPIO-Pin and r1 for input(0)/output(1)
+
+        mov         r0,#PIN11               @ Outlet (nRSTOut)
+        bl          pinMode
+
+        mov         r0,#PIN12               @ Outlet (StepOut)
+        bl          pinMode
+
+        mov         r0,#PIN13               @ ColorWheel (StepCW)
+        bl          pinMode
+
+        mov         r0,#PIN16               @ ColorWheel (DirCW)
+        bl          pinMode
+
+        mov         r0,#PIN17               @ ColorWheel (nRSTCW)
+        bl          pinMode
+
+        mov         r0,#PIN19               @ Feeder (GoStop)
+        bl          pinMode
+
+        mov         r0,#PIN26               @ Outlet (DirOut)
+        bl          pinMode
+
+        mov         r0,#PIN27               @ Coprocessor (nSLP)
+        bl          pinMode
+
+        pop         {lr}
+        bx          lr
+
+@ pin 11 und 17 auf HIGH um Motoren aufzuwecken
+motor_wakeup:
+        push        {lr}
+        mov         r0, #PIN11
+        mov         r1, #1
+        bl          digitalWrite
+
+        mov         r0, #PIN17
+        mov         r1, #1
+        bl          digitalWrite
+        pop         {lr}
+        bx          lr
+
+
+@ pin 27 auf HIGH um coproc aufwecken
+coproc_wakeup:
+        push        {lr}
+        mov         r0, #PIN27
+        mov         r1, #1
+        bl          digitalWrite
+        pop         {lr}
+        bx          lr
+
+go_default_color_wheel:
+        push        {lr}
+
+        mov         r0,#0
+
+        @ read hallsensor of color wheel, connected to PIN20
+        @mov         r0,#1,20
+        @ldr         r1,GPIOREG
+        @and         r0,r1,r0
+        @lsr         r0,#20
+
+        cmp         r0, #0
+        bne         end_go_default_color_wheel@ exit go_to_default if hall sensor is 1
+
+        bl          step_color_wheel
+        pop         {lr}
+        b           go_default_color_wheel
+
+end_go_default_color_wheel:
+        pop         {lr}
+        bx          lr
 
 
 
