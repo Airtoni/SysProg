@@ -248,7 +248,7 @@ main:
         bl          coproc_wakeup           @ getting the coprocessor out of sleep mode
         bl          motor_wakeup            @ getting the motors ready to work
 
-        bl          go_default_color_wheel  @ color wheel searches for the next magnet and stops
+       @ bl          go_default_color_wheel  @ color wheel searches for the next magnet and stops
         bl          go_default_outlet       @ outlet moves until it finds the magnet
         bl          start_feeder            @ starting the feeder
 
@@ -288,7 +288,7 @@ read_color:
         mov         COLREG,#0b111
         lsl         COLREG,#21
 
-        @ldr         r0,GPIOREG
+        @ldr         r0,GPIOREG + 0x34
         @and         COLREG, COLREG, r0
         @lsr         COLREG, #21
         pop         {lr}
@@ -326,18 +326,18 @@ step_color_wheel:
         mov         r1, #1
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ set r0 to ca 200 000d = 31000h   3 Zeros in the at are rounded to be able to just shift the value to the right position
+        mov         r0, #0x31,18            @ set r0 to ca 200 000d = 31000h   3 Zeros in the at are rounded to be able to just shift the value to the right position
         bl          wait
 
         mov         r0, #PIN13              @ set StepCW to LOW
         mov         r1, #0
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ set r0 to ca 200 000 as number of cycles to wait
+        mov         r0, #0x31,18            @ set r0 to ca 200 000 as number of cycles to wait
         bl          wait
-		add         POSOUT, POSOUT, #1
-		cmp         POSOUT, #400
-		moveq       POSOUT, #0
+        add         POSOUT, POSOUT, #1
+        cmp         POSOUT, #400
+        moveq       POSOUT, #0
         pop         {lr}                    @ restores lr
         bx          lr
 
@@ -373,32 +373,80 @@ hw_init:
         mov         r0,#PIN11               @ Outlet (nRSTOut)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN12               @ Outlet (StepOut)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN13               @ ColorWheel (StepCW)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN16               @ ColorWheel (DirCW)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN17               @ ColorWheel (nRSTCW)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN19               @ Feeder (GoStop)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN26               @ Outlet (DirOut)
         bl          pinMode
 
+        mov         r1,#1
         mov         r0,#PIN27               @ Coprocessor (nSLP)
         bl          pinMode
 
         pop         {lr}
         bx          lr
 
+
 led_init:
-        bx          lr                @ to be implemented
+        push {lr}
+        bl WS2812RPi_Init
+
+
+        mov         r0,#1                    @Pos: 1 Farbe: Red
+        ldr r1,=0xFF0000
+        bl WS2812RPi_SetSingle
+
+
+        mov r0,#2                    @Pos: 2 Farbe: Green
+        ldr r1,=0x00FF00
+        bl WS2812RPi_SetSingle
+
+
+        mov r0,#3                    @Pos: 3 Farbe: Blue
+        ldr r1,=0x0000FF
+        bl WS2812RPi_SetSingle
+
+
+        mov r0,#4                    @Pos: 4 Farbe: Brown
+        ldr r1,=0x8B4513
+        bl WS2812RPi_SetSingle
+
+
+        mov r0,#5                    @Pos: 5 Farbe: Orange
+        ldr r1,=0xFF8000
+        bl WS2812RPi_SetSingle
+
+
+        mov r0,#6                    @Pos: 1 Farbe: Yellow
+        ldr r1,=0xFFFF00
+        bl WS2812RPi_SetSingle
+
+        mov r0,#100
+        bl WS2812RPi_SetBrightness
+
+
+        bl WS2812RPi_Show
+
+        pop {lr}
+        bx lr
 
 @ pin 11 und 17 auf HIGH um Motoren aufzuwecken
 motor_wakeup:
@@ -522,4 +570,3 @@ end_of_app:
         .end
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
