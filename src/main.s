@@ -48,6 +48,7 @@
 
 TMPREG  .req      r5
 RETREG  .req      r6
+POSOUT  .req      r7
 WAITREG .req      r8
 RLDREG  .req      r9
 GPIOREG .req      r10
@@ -238,23 +239,46 @@ main:
 
         @ WARNING:
         @   call "end_of_app" if you're done with your application
-        bl           wiringPiSetup
+
+
+        bl          wiringPiSetup
         bl          hw_init                 @ calling other hardware initalize
-      @  bl          led_init                @ calling led initalize
+        bl          led_init                @ calling led initalize
 
-        bl          coproc_wakeup
-        bl          motor_wakeup
+        bl          coproc_wakeup           @ getting the coprocessor out of sleep mode
+        bl          motor_wakeup            @ getting the motors ready to work
 
-        bl          start_feeder
-        bl          go_default_color_wheel
-      @  bl          go_default_outlet
+        bl          go_default_color_wheel  @ color wheel searches for the next magnet and stops
+        bl          go_default_outlet       @ outlet moves until it finds the magnet
+        bl          start_feeder            @ starting the feeder
+
+        mov         r0, #5                  @ setting r0 to 5 to go throw the sorting 5 times
 
 main_loop:
-        @bl          rotate_color_wheel
-        bl          read_color
-        @bl          rotate_outlet
-        @b           main_loop
-        bl          stop_feeder
+
+        push        {r0}                    @ moveing r0 to the stack because this register is used at other places
+
+        bl          rotate_color_wheel      @ rotates the color wheel by 90° to get an object infront of the color detector
+        bl          read_color              @ reading the color detector result is stored in r0 as a number in range 1-6
+        mov         r1, #67                 @ ca. 67 steps per glass bowl
+        mul         r2, r0, r1              @ multiply bowl number by steps per bowl to get the goal positon
+        mov         r0, r2
+
+  @     bl          go_default_outlet       @ outlet moves to default to simplefy the algorythem
+
+rotate_loop:
+        cmp         r0, POSOUT
+        push        {r0}                    @ saveing the goal position on the stack
+        blne        step_outlet             @ outlet makes one step if goal position and current position (POSOUT) are not equal
+        pop         {r0}                    @ getting the goal position from the stack
+        bne         rotate_loop             @ jumps back if goal position and current position are not equal
+
+        pop         {r0}
+        sub         r0, r0, #1              @ decrementing r0 to create a for loop: start = 5 end = 0 decremanting
+        cmp         r0, #1
+        bleq        stop_feeder             @ stops the noisy feeder before going trew the last sort
+        cmp         r0, #0
+        bne         main_loop
 
         b           end_of_app
 
@@ -302,15 +326,18 @@ step_color_wheel:
         mov         r1, #1
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        mov         r0, #0x31,12            @ set r0 to ca 200 000d = 31000h   3 Zeros in the at are rounded to be able to just shift the value to the right position
         bl          wait
 
         mov         r0, #PIN13              @ set StepCW to LOW
         mov         r1, #0
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        mov         r0, #0x31,12            @ set r0 to ca 200 000 as number of cycles to wait
         bl          wait
+		add         POSOUT, POSOUT, #1
+		cmp         POSOUT, #400
+		moveq       POSOUT, #0
         pop         {lr}                    @ restores lr
         bx          lr
 
@@ -370,6 +397,9 @@ hw_init:
         pop         {lr}
         bx          lr
 
+led_init:
+        bx          lr                @ to be implemented
+
 @ pin 11 und 17 auf HIGH um Motoren aufzuwecken
 motor_wakeup:
         push        {lr}
@@ -415,7 +445,40 @@ end_go_default_color_wheel:
         pop         {lr}
         bx          lr
 
+go_default_outlet:
+        push        {lr}
 
+        mov         r0,#0
+
+        @ read hallsensor of outlet, connected to PIN21
+
+        cmp         r0, #0
+        bne         end_go_default_color_wheel@ exit go_to_default if hall sensor is 1
+
+        bl          step_outlet
+        pop         {lr}
+        b           go_default_outlet
+
+end_go_default_outlet:
+        pop         {lr}
+        bx          lr
+
+rotate_color_wheel:
+        push        {lr}
+
+        mov         r2, #0b11001, 4         @ stores number of steps in r2 equals to 400d = 1 1001 0000b
+        push        {r2}
+
+rotate_cw_loop:
+        bl          step_color_wheel        @ steps the color wheel for steps spesified in r2
+        pop         {r2}
+        sub         r2, r2, #1
+        cmp         r2, #0
+        pushne      {r2}
+        bne         rotate_cw_loop
+
+        pop         {lr}
+        bx          lr
 
 @ --------------------------------------------------------------------------------------------------------------------
 @
@@ -459,3 +522,4 @@ end_of_app:
         .end
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
