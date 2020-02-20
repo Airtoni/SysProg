@@ -326,18 +326,16 @@ step_color_wheel:
         mov         r1, #1
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ set r0 to ca 200 000d = 31000h   3 Zeros in the at are rounded to be able to just shift the value to the right position
+    	ldr			r0, =3000000            @ schreibt 3 000 000 in r0, sodass 3 000 000 gewartet werden
         bl          wait
 
         mov         r0, #PIN13              @ set StepCW to LOW
         mov         r1, #0
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ set r0 to ca 200 000 as number of cycles to wait
+    	ldr			r0, =3000000            @ schreibt 3 000 000 in r0, sodass 3 000 000 gewartet werden
         bl          wait
-		add         POSOUT, POSOUT, #1
-		cmp         POSOUT, #400
-		moveq       POSOUT, #0
+
         pop         {lr}                    @ restores lr
         bx          lr
 
@@ -348,14 +346,18 @@ step_outlet:
         mov         r1, #1
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+    	ldr			r0, =3000000            @ schreibt 3 000 000 in r0, sodass 3 000 000 gewartet werden
         bl          wait
 
         mov         r0, #PIN12              @ set StepOut to LOW
         mov         r1, #0
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        add         POSOUT, POSOUT, #1
+		cmp         POSOUT, #400
+		moveq       POSOUT, #0
+
+    	ldr			r0, =3000000            @ schreibt 3 000 000 in r0, sodass 3 000 000 gewartet werden
         bl          wait
         pop         {lr}                    @ restores lr
         bx          lr
@@ -369,28 +371,37 @@ hw_init:
         ldr         GPIOREG, [r1]
 
         mov         r1,#1                   @ pinMode uses r0 to spesify the GPIO-Pin and r1 for input(0)/output(1)
-
         mov         r0,#PIN11               @ Outlet (nRSTOut)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN12               @ Outlet (StepOut)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN13               @ ColorWheel (StepCW)
         bl          pinMode
+       @ mov			r0,#1
+       @ lsl			r0,#9
+       @ str
 
+		mov			r1,#1
         mov         r0,#PIN16               @ ColorWheel (DirCW)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN17               @ ColorWheel (nRSTCW)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN19               @ Feeder (GoStop)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN26               @ Outlet (DirOut)
         bl          pinMode
 
+		mov			r1,#1
         mov         r0,#PIN27               @ Coprocessor (nSLP)
         bl          pinMode
 
@@ -399,6 +410,7 @@ hw_init:
 
 
 led_init:
+		push {lr}
 		bl WS2812RPi_Init
 
 
@@ -436,6 +448,8 @@ led_init:
 
 
 		bl WS2812RPi_Show
+		pop {lr}
+		bx lr
 
 @ pin 11 und 17 auf HIGH um Motoren aufzuwecken
 motor_wakeup:
