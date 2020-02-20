@@ -397,8 +397,45 @@ hw_init:
         pop         {lr}
         bx          lr
 
+
 led_init:
-        bx          lr                @ to be implemented
+		bl WS2812RPi_Init
+
+
+		mov 		r0,#1					@Pos: 1 Farbe: Red
+		ldr r1,=0xDF3F3F
+		bl WS2812RPi_SetSingle
+
+
+		mov r0,#2					@Pos: 2 Farbe: Green
+		ldr r1,=0x59BBB0
+		bl WS2812RPi_SetSingle
+
+
+		mov r0,#3					@Pos: 3 Farbe: Blue
+		ldr r1,=0x2674B8
+		bl WS2812RPi_SetSingle
+
+
+		mov r0,#4					@Pos: 4 Farbe: Brown
+		ldr r1,=0x301312
+		bl WS2812RPi_SetSingle
+
+
+		mov r0,#5					@Pos: 5 Farbe: Orange
+		ldr r1,=0xEA5B2C
+		bl WS2812RPi_SetSingle
+
+
+		mov r0,#6					@Pos: 1 Farbe: Yellow
+		ldr r1,=0xF6EA51
+		bl WS2812RPi_SetSingle
+
+		mov r0,#100
+		bl WS2812RPi_SetBrightness
+
+
+		bl WS2812RPi_Show
 
 @ pin 11 und 17 auf HIGH um Motoren aufzuwecken
 motor_wakeup:
