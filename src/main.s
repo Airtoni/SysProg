@@ -37,6 +37,7 @@
         .equ      STACK_ARGS,8                @ sp already 8-byte aligned
 
  @Teh following are defined by us
+    .equ    PIN9,13
     .equ    PIN11,14
     .equ    PIN12,26
     .equ    PIN13,23
@@ -100,6 +101,8 @@ timerir_mmap_fd:
         .extern delay
         .extern digitalWrite
         .extern pinMode
+        .extern wiringPiISR
+        .extern INT_EDGE_RISING
 
         @ externals for RGB LEDs
         .extern WS2812RPi_Init
@@ -514,6 +517,11 @@ hw_init:
         mov         r0,#PIN27               @ Coprocessor (nSLP)
         bl          pinMode
 
+        mov         r0,#PIN9
+        mov         r1,#INT_EDGE_RISING
+        ldr         r2,=end_of_app
+        bl          wiringPiISR             @ Interrupt for PIN9 (MiddleButton) calling end_of_app at press
+
         pop         {lr}
         bx          lr
 
@@ -626,6 +634,6 @@ end_of_app:
         mov       r0, #0                      @ return code 0
         mov       r7, #1                      @ exit app
         svc       0
-        .end
+        END
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
