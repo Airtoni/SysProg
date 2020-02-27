@@ -46,6 +46,7 @@
     .equ    PIN26,25
     .equ    PIN27,2
 
+LOOPCOUNT .req    r4
 TMPREG  .req      r5
 RETREG  .req      r6
 POSOUT  .req      r7
@@ -248,21 +249,30 @@ main:
         bl          coproc_wakeup           @ getting the coprocessor out of sleep mode
         bl          motor_wakeup            @ getting the motors ready to work
 
-       @ bl          go_default_color_wheel  @ color wheel searches for the next magnet and stops
+        bl          go_default_color_wheel  @ color wheel searches for the next magnet and stops
         bl          go_default_outlet       @ outlet moves until it finds the magnet
+        
+        mov         r0, #5                  @ setting r0 to 5 to go throw the sorting 5 times
         bl          start_feeder            @ starting the feeder
 
-        mov         r0, #5                  @ setting r0 to 5 to go throw the sorting 5 times
-
 main_loop:
+        
+        bl          rotate_color_wheel_90_degrees @rotate M&M in front of color sensor
+        ldr         r0,=33333333               @ Wait for 1s ??
+        bl          wait
 
-        push        {r0}                    @ moveing r0 to the stack because this register is used at other places
+        bl          read_color
+        bl          rotate_outlet_to_color
+       
+        b          main_loop
 
-        bl          rotate_color_wheel      @ rotates the color wheel by 90° to get an object infront of the color detector
-        bl          read_color              @ reading the color detector result is stored in r0 as a number in range 1-6
-        mov         r1, #67                 @ ca. 67 steps per glass bowl
-        mul         r2, r0, r1              @ multiply bowl number by steps per bowl to get the goal positon
-        mov         r0, r2
+        @push        {r0}                    @ moveing r0 to the stack because this register is used at other places
+
+        @bl          rotate_color_wheel      @ rotates the color wheel by 90° to get an object infront of the color detector
+       @ bl          read_color              @ reading the color detector result is stored in r0 as a number in range 1-6
+       @ mov         r1, #67                 @ ca. 67 steps per glass bowl
+        @mul         r2, r0, r1              @ multiply bowl number by steps per bowl to get the goal positon
+        @mov         r0, r2
 
   @     bl          go_default_outlet       @ outlet moves to default to simplefy the algorythem
 
@@ -294,12 +304,25 @@ read_color:
         pop         {lr}
         bx          lr
 
+@Read Pin in r0 and returns in r1
+digitalRead:
+        mov         r1,#1
+        lsl         r1,r0
+        ldr         r2,GPIOREG,0x34
+        and         r1,r2,r1
+        lsr         r1,r0
+
 @ waits three times the tick count privided in r0
 wait:
         subs        r0, r0, #1
         cmp         r0, #0
         bne         wait
         bx          lr
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@               FEEDER CONTROL
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 
 @ starts the feeder
 start_feeder:
@@ -313,10 +336,36 @@ start_feeder:
 @ starts the feeder
 stop_feeder:
         push        {lr}
-        mov         r0, #PIN13
+        mov         r0, #PIN19
         mov         r1, #0
         bl          digitalWrite
         pop         {lr}
+        bx          lr
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@               COLOR WHEEL CONTROL
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+rotate_color_wheel_90_degrees: @Set POSOUT to 0 before starting
+        push        {lr}
+
+        mov          LOOPCOUNT,#0
+        bl           rotate_cw_lopp
+        pop          {lr}
+        bx            lr
+
+rotate_cw_loop:
+        push        {lr}
+        bl          step_color_wheel
+
+        add         LOOPCOUNT, LOOPCOUNT, #1
+        cmp         LOOPCOUNT, #400
+
+        pop         {lr}
+        bne         rotate_cw_loop
+
+        @ stores number of steps in r2 equals to 400d = 1 1001 0000b
+        
         bx          lr
 
 @ color_wheel steps one time, takes about 1ms
@@ -335,10 +384,55 @@ step_color_wheel:
 
         mov         r0, #0x31,18            @ set r0 to ca 200 000 as number of cycles to wait
         bl          wait
-        add         POSOUT, POSOUT, #1
-        cmp         POSOUT, #400
-        moveq       POSOUT, #0
         pop         {lr}                    @ restores lr
+        bx          lr
+
+go_default_color_wheel:
+        push        {lr}
+
+        @mov         r0,#0
+
+        @ read hallsensor of color wheel, connected to PIN20
+        mov         r0,#20
+        bl digitalRead
+
+        cmp         r1, #1
+        beq         end_go_default@ exit go_to_default if hall sensor is 1
+
+        bl          step_color_wheel
+        pop         {lr}
+        b           go_default_color_wheel
+
+end_go_default:
+        pop         {lr}
+        bx          lr
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@               OUTLET CONTROL
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+rotate_outlet_to_color:
+        push        {lr}
+
+        pop         {lr}
+        bx          lr
+
+rotate_outlet_one_pos:
+        push        {lr}
+        mov         LOOPCOUNT,#0
+        bl          rotate_outlet_loop
+        pop         {lr}
+        bx          lr
+
+rotate_outlet_loop:
+        push        {lr}
+        bl          step_outlet
+        add         LOOPCOUNT,LOOPCOUNT,#1
+        cmp         LOOPCOUNT,#67
+
+        pop         {lr}
+        bne         rotate_outlet_loop 
+        
         bx          lr
 
 @ outlet steps one time, takes about 1ms
@@ -348,17 +442,36 @@ step_outlet:
         mov         r1, #1
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        mov         r0, #0x31,18            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
         bl          wait
 
         mov         r0, #PIN12              @ set StepOut to LOW
         mov         r1, #0
         bl          digitalWrite
 
-        mov         r0, #0x31,12            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
+        mov         r0, #0x31,18            @ schreibt 0x31 in r0 und shifted 12 nach links, somit steht 200 000 dec in r0
         bl          wait
         pop         {lr}                    @ restores lr
         bx          lr
+
+go_default_outlet:
+        push        {lr}
+        mov          POSOUT,#1
+        @ read hallsensor of outlet, connected to PIN21
+        mov         r0,#21
+        bl          digitalRead
+
+        cmp         r1, #1
+        beq         end_go_default@ exit go_to_default if hall sensor is 1
+
+        bl          step_outlet
+        pop         {lr}
+        b           go_default_outlet
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@               Initialisation
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
 hw_init:
@@ -420,23 +533,24 @@ led_init:
         bl WS2812RPi_SetSingle
 
 
-        mov r0,#3                    @Pos: 3 Farbe: Blue
-        ldr r1,=0x0000FF
+        mov r0,#3     
+        ldr r1,=0xFFFF00               @Pos: 3 Farbe: Yellow
         bl WS2812RPi_SetSingle
 
 
-        mov r0,#4                    @Pos: 4 Farbe: Brown
-        ldr r1,=0x8B4513
+        mov r0,#4  
+        ldr r1,=0x0000FF                  @Pos: 4 Farbe: Blue
         bl WS2812RPi_SetSingle
 
 
-        mov r0,#5                    @Pos: 5 Farbe: Orange
+        mov r0,#5                       @Pos: 5 Farbe: Orange
         ldr r1,=0xFF8000
         bl WS2812RPi_SetSingle
 
 
-        mov r0,#6                    @Pos: 1 Farbe: Yellow
-        ldr r1,=0xFFFF00
+        mov r0,#6   
+                        
+        ldr r1,=0x8B4513                 @Pos: 1 Farbe: Brown
         bl WS2812RPi_SetSingle
 
         mov r0,#100
@@ -471,62 +585,7 @@ coproc_wakeup:
         pop         {lr}
         bx          lr
 
-go_default_color_wheel:
-        push        {lr}
 
-        mov         r0,#0
-
-        @ read hallsensor of color wheel, connected to PIN20
-        @mov         r0,#1,20
-        @ldr         r1,GPIOREG
-        @and         r0,r1,r0
-        @lsr         r0,#20
-
-        cmp         r0, #0
-        bne         end_go_default_color_wheel@ exit go_to_default if hall sensor is 1
-
-        bl          step_color_wheel
-        pop         {lr}
-        b           go_default_color_wheel
-
-end_go_default_color_wheel:
-        pop         {lr}
-        bx          lr
-
-go_default_outlet:
-        push        {lr}
-
-        mov         r0,#0
-
-        @ read hallsensor of outlet, connected to PIN21
-
-        cmp         r0, #0
-        bne         end_go_default_color_wheel@ exit go_to_default if hall sensor is 1
-
-        bl          step_outlet
-        pop         {lr}
-        b           go_default_outlet
-
-end_go_default_outlet:
-        pop         {lr}
-        bx          lr
-
-rotate_color_wheel:
-        push        {lr}
-
-        mov         r2, #0b11001, 4         @ stores number of steps in r2 equals to 400d = 1 1001 0000b
-        push        {r2}
-
-rotate_cw_loop:
-        bl          step_color_wheel        @ steps the color wheel for steps spesified in r2
-        pop         {r2}
-        sub         r2, r2, #1
-        cmp         r2, #0
-        pushne      {r2}
-        bne         rotate_cw_loop
-
-        pop         {lr}
-        bx          lr
 
 @ --------------------------------------------------------------------------------------------------------------------
 @
